@@ -7,6 +7,7 @@ if __name__ == "__main__":
         for line in data:
             line = line.rstrip("\n")
             # TODO: process the line, aggregating using Python data structures
+            print(line)
 
     # TODO: Create a NumPy array containing the data distribution. The
     # NumPy array should contain only data, not any mapping. If required,
