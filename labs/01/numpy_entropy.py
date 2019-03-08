@@ -15,6 +15,7 @@ if __name__ == "__main__":
     with open("numpy_entropy_data.txt", "r") as data:
         for line in data:
             line = line.rstrip("\n")
+            # TODO: process the line, aggregating using Python data structures
             if line in data_dict:
                 data_dict[line] += 1
             else:
