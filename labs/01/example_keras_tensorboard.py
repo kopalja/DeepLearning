@@ -37,6 +37,7 @@ model = tf.keras.Sequential([
     tf.keras.layers.Dense(MNIST.LABELS, activation=tf.nn.softmax, name="output_layer"),
 ])
 
+
 model.compile(
     optimizer=tf.keras.optimizers.Adam(),
     loss=tf.keras.losses.sparse_categorical_crossentropy, # SparseCategoricalCrossentropy in v2
