@@ -1,22 +1,21 @@
-#!/usr/bin/env python3
+# dd7e3410-38c0-11e8-9b58-00505601122b
+# 6e14ef6b-3281-11e8-9de3-00505601122b
+
 import argparse
 import datetime
 import os
 import re
+import math
 
 import numpy as np
 import tensorflow as tf
 
-
 from mnist import MNIST
-
-
-
 
 # Parse arguments
 parser = argparse.ArgumentParser()
 parser.add_argument("--batch_size", default=50, type=int, help="Batch size.")
-parser.add_argument("--decay", default="polynomial", type=str, help="Learning decay rate type")
+parser.add_argument("--decay", default=None, type=str, help="Learning decay rate type")
 parser.add_argument("--epochs", default=2, type=int, help="Number of epochs.")
 parser.add_argument("--hidden_layer", default=200, type=int, help="Size of the hidden layer.")
 parser.add_argument("--learning_rate", default=0.01, type=float, help="Initial learning rate.")
@@ -26,7 +25,6 @@ parser.add_argument("--optimizer", default="SGD", type=str, help="Optimizer to u
 parser.add_argument("--recodex", default=False, action="store_true", help="Evaluation in ReCodEx.")
 parser.add_argument("--threads", default=1, type=int, help="Maximum number of threads to use.")
 args = parser.parse_args()
-
 # Fix random seeds
 np.random.seed(42)
 tf.random.set_seed(42)
@@ -68,32 +66,30 @@ model = tf.keras.Sequential([
 # by using `model.optimizer.learning_rate(model.optimizer.iterations)`,
 # so after training this value should be `args.learning_rate_final`.
 
-def set_optimizer(args, training_size):
-    number_of_training_batches = training_size / args.batch_size
-    if args.momentum == None:
-        args.momentum = 0.0
-
+def set_optimizer(args, decay_steps):
     if args.decay == None:
-        if args.optimizer == "SGD":
-            return tf.optimizers.SGD(args.learning_rate, args.momentum)
-        else:
-            return tf.keras.optimizers.Adam(args.learning_rate)
+        scheduler = args.learning_rate
     elif args.decay == "polynomial":
         scheduler = tf.keras.optimizers.schedules.PolynomialDecay(
-            args.learning_rate_final, 
-            decay_steps = number_of_training_batches)
+            args.learning_rate,
+            end_learning_rate = args.learning_rate_final,
+            power = 1,
+            decay_steps = decay_steps)
     elif args.decay == "exponential":
-        scheduler = tf.keras.optimizers.schedules.ExponentialDecay(
-            args.learning_rate_final,
-            decay_steps = number_of_training_batches,
-            decay_rate = 0.96,
-            staircase = False)
+        scheduler = tf.optimizers.schedules.ExponentialDecay(
+            args.learning_rate,
+            decay_rate = math.pow((args.learning_rate_final / args.learning_rate), (1 / decay_steps)),
+            decay_steps = 1)
     if args.optimizer == "SGD":
-        return tf.keras.optimizers.SGD(scheduler)
-    else:
-        return tf.keras.optimizers.Adam(scheduler)
+        if args.momentum == None:
+            return tf.keras.optimizers.SGD(learning_rate = scheduler)
+        else:
+            return tf.keras.optimizers.SGD(learning_rate = scheduler, momentum = args.momentum)
+    elif args.optimizer == "Adam":
+        return tf.keras.optimizers.Adam(learning_rate = scheduler)
+        
 
-optimizer = set_optimizer(args, len(mnist.train.data["images"]))
+optimizer = set_optimizer(args, len(mnist.train.data["images"]) * args.epochs // args.batch_size)
 
 model.compile(
     optimizer = optimizer,
@@ -124,7 +120,3 @@ tb_callback.on_epoch_end(1, dict(("val_test_" + metric, value) for metric, value
 # TODO: Write test accuracy as percentages rounded to two decimal places.
 with open("mnist_training.out", "w") as out_file:
     print("{:.2f}".format(100 * accuracy), file=out_file)
-
-
-print(model.optimizer.learning_rate(model.optimizer.iterations))
-print(args.learning_rate_final)
