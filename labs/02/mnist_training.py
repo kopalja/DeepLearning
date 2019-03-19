@@ -84,7 +84,7 @@ def set_optimizer(args, training_size):
             decay_steps = number_of_training_batches)
     elif args.decay == "exponential":
         scheduler = tf.keras.optimizers.schedules.ExponentialDecay(
-            args.learning_rate,
+            args.learning_rate_final,
             decay_steps = number_of_training_batches,
             decay_rate = 0.96,
             staircase = False)
