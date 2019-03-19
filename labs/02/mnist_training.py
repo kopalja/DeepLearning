@@ -13,7 +13,6 @@ from mnist import MNIST
 
 
 
-
 # Parse arguments
 parser = argparse.ArgumentParser()
 parser.add_argument("--batch_size", default=50, type=int, help="Batch size.")
@@ -45,6 +44,7 @@ args.logdir = os.path.join("logs", "{}-{}-{}".format(
 
 # Load data
 mnist = MNIST()
+
 
 
 # Create the model
