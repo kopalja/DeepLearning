@@ -1,4 +1,7 @@
+<<<<<<< HEAD
 #!/usr/bin/env python3
+=======
+>>>>>>> 6dd6a860f7cf2da34453382b4b3acf42fa35e5f6
 import argparse
 import datetime
 import os
@@ -13,7 +16,11 @@ parser = argparse.ArgumentParser()
 parser.add_argument("model", default="gym_cartpole_model.h5", nargs="?", type=str, help="Name of model.")
 parser.add_argument("--episodes", default=100, type=int, help="Number of episodes.")
 parser.add_argument("--render", default=False, action="store_true", help="Render the environment.")
+<<<<<<< HEAD
 parser.add_argument("--threads", default=1, type=int, help="Maximum number of threads to use.")
+=======
+parser.add_argument("--threads", default=2, type=int, help="Maximum number of threads to use.")
+>>>>>>> 6dd6a860f7cf2da34453382b4b3acf42fa35e5f6
 args = parser.parse_args()
 
 # Use given number of threads

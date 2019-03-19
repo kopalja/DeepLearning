@@ -128,5 +128,3 @@ with open("mnist_training.out", "w") as out_file:
 
 print(model.optimizer.learning_rate(model.optimizer.iterations))
 print(args.learning_rate_final)
-
-
