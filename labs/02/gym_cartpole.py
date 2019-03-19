@@ -1,10 +1,7 @@
-<<<<<<< HEAD
 #!/usr/bin/env python3
-=======
 # dd7e3410-38c0-11e8-9b58-00505601122b
 # 6e14ef6b-3281-11e8-9de3-00505601122b
 
->>>>>>> 6dd6a860f7cf2da34453382b4b3acf42fa35e5f6
 import argparse
 import datetime
 import os
@@ -16,13 +13,10 @@ import tensorflow as tf
 # Parse arguments
 # TODO: Set reasonable defaults and possibly add more arguments.
 parser = argparse.ArgumentParser()
-<<<<<<< HEAD
 parser.add_argument("--batch_size", default=10, type=int, help="Batch size.")
 parser.add_argument("--epochs", default=3, type=int, help="Number of epochs.")
-=======
 parser.add_argument("--batch_size", default=5, type=int, help="Batch size.")
 parser.add_argument("--epochs", default=100, type=int, help="Number of epochs.")
->>>>>>> 6dd6a860f7cf2da34453382b4b3acf42fa35e5f6
 parser.add_argument("--threads", default=1, type=int, help="Maximum number of threads to use.")
 args = parser.parse_args()
 
@@ -52,19 +46,14 @@ observations, labels = np.array(observations), np.array(labels)
 # However, beware that there is currently a bug in Keras which does
 # not correctly serialize InputLayer. Instead of using an InputLayer,
 # pass explicitly `input_shape` to the first real model layer.
-<<<<<<< HEAD
 model = None
-=======
 model = tf.keras.Sequential([
     tf.keras.layers.Dense(125, activation=tf.nn.tanh, input_shape=observations[0].shape),
     tf.keras.layers.Dropout(0.35),
-    
     tf.keras.layers.Dense(150, activation=tf.nn.tanh),
     tf.keras.layers.Dropout(0.4),
-
     tf.keras.layers.Dense(2, activation=tf.nn.softmax)
 ])
->>>>>>> 6dd6a860f7cf2da34453382b4b3acf42fa35e5f6
 
 model.compile(
     optimizer=tf.keras.optimizers.Adam(),
@@ -72,11 +61,8 @@ model.compile(
     metrics=[tf.keras.metrics.SparseCategoricalAccuracy()],
 )
 
-<<<<<<< HEAD
 tb_callback=tf.keras.callbacks.TensorBoard(args.logdir)
-=======
 tb_callback = tf.keras.callbacks.TensorBoard(args.logdir)
->>>>>>> 6dd6a860f7cf2da34453382b4b3acf42fa35e5f6
 model.fit(observations, labels, batch_size=args.batch_size, epochs=args.epochs, callbacks=[tb_callback])
 
 model.save("gym_cartpole_model.h5", include_optimizer=False)
