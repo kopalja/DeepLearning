@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+
+# dd7e3410-38c0-11e8-9b58-00505601122b
+# 6e14ef6b-3281-11e8-9de3-00505601122b
+
 import argparse
 import datetime
 import os
@@ -45,17 +49,25 @@ mnist = MNIST()
 # and use it for all kernels and biases of all Dense layers. Note that
 # because of a bug if `args.l2` is zero, use `None` instead of `L1L2` regularizer
 # with zero l2.
+if args.l2 == 0.0:
+    l2_regulation = None
+else:
+    l2_regulation = tf.keras.regularizers.L1L2(0, args.l2)
 
 # TODO: Implement dropout.
 # Add a `tf.keras.layers.Dropout` with `args.dropout` rate after the Flatten
 # layer and after each Dense hidden layer (but not after the output Dense layer).
 
+
+
 # Create the model
 model = tf.keras.Sequential()
 model.add(tf.keras.layers.Flatten(input_shape=[MNIST.H, MNIST.W, MNIST.C]))
+model.add(tf.keras.layers.Dropout(args.dropout))
 for hidden_layer in args.hidden_layers:
-    model.add(tf.keras.layers.Dense(hidden_layer, activation=tf.nn.relu))
-model.add(tf.keras.layers.Dense(MNIST.LABELS))
+    model.add(tf.keras.layers.Dense(hidden_layer, activation=tf.nn.relu, kernel_regularizer = l2_regulation, bias_regularizer = l2_regulation))
+    model.add(tf.keras.layers.Dropout(args.dropout))
+model.add(tf.keras.layers.Dense(MNIST.LABELS, kernel_regularizer = l2_regulation, bias_regularizer = l2_regulation))
 
 # TODO: Implement label smoothing.
 # Apply the given smoothing. You will need to change the
@@ -66,10 +78,25 @@ model.add(tf.keras.layers.Dense(MNIST.LABELS))
 # to a full categorical distribution (you can use either NumPy or there is
 # a helper method also in the Keras API).
 
+def scalar_to_one_hot(dato):
+    dist = np.zeros(shape=(10,), dtype='float32')
+    dist[dato] = 1.0
+    return dist
+
+def modifi_labels(labels):
+    return np.asarray([scalar_to_one_hot(dato) for dato in labels])
+
+
+
+mnist.train.data["labels"] = modifi_labels(mnist.train.data["labels"])
+mnist.dev.data["labels"] = modifi_labels(mnist.dev.data["labels"])
+mnist.test.data["labels"] = modifi_labels(mnist.test.data["labels"])
+
+
 model.compile(
     optimizer=tf.keras.optimizers.Adam(),
-    loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-    metrics=[tf.keras.metrics.SparseCategoricalAccuracy(name="accuracy")],
+    loss=tf.keras.losses.CategoricalCrossentropy(from_logits=True, label_smoothing = args.label_smoothing),
+    metrics=[tf.keras.metrics.CategoricalAccuracy(name="accuracy")],
 )
 
 tb_callback=tf.keras.callbacks.TensorBoard(args.logdir, update_freq=1000, profile_batch=1)
