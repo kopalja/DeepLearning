@@ -86,6 +86,7 @@ def scalar_to_one_hot(dato):
 def modifi_labels(labels):
     return np.asarray([scalar_to_one_hot(dato) for dato in labels])
 
+#
 
 
 mnist.train.data["labels"] = modifi_labels(mnist.train.data["labels"])
