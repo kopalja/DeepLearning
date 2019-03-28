@@ -55,7 +55,6 @@ uppercase_data = UppercaseData(args.window, args.alphabet_size)
 #   You can then flatten the one-hot encoded windows and follow with a dense layer.
 # - Alternatively, you can use `tf.keras.layers.Embedding`, which is an efficient
 #   implementation of one-hot encoding followed by a Dense layer, and flatten afterwards.
-
 with open("uppercase_test.txt", "w") as out_file:
     # TODO: Generate correctly capitalized test set.
     # Use `uppercase_data.test.text` as input, capitalize suitable characters,

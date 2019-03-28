@@ -26,6 +26,7 @@ model = tf.keras.Sequential([
     tf.keras.layers.Dense(MNIST.LABELS, activation=tf.nn.softmax),
 ])
 
+
 optimizer = tf.train.AdamOptimizer() # tf.keras.optimizers.Adam in v2
 accuracy = tf.keras.metrics.SparseCategoricalAccuracy()
 for epoch in range(args.epochs):
