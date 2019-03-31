@@ -1,11 +1,17 @@
-#!/usr/bin/env python3
+# dd7e3410-38c0-11e8-9b58-00505601122b
+# 6e14ef6b-3281-11e8-9de3-00505601122b
+
 import numpy as np
 import tensorflow as tf
 
 from cifar10 import CIFAR10
 
+
 # The neural network model
-class Network(tf.keras.Model):
+class Network(tf.keras.Sequential):
+    def call(self, inputs, training=None, mask=None):
+        pass
+
     def __init__(self, args):
         # TODO: Define a suitable model, by calling `super().__init__`
         # with appropriate inputs and outputs.
@@ -13,15 +19,51 @@ class Network(tf.keras.Model):
         # Alternatively, if you prefer to use a `tf.keras.Sequential`,
         # replace the `Network` parent, call `super().__init__` at the beginning
         # of this constructor and add layers using `self.add`.
+        super().__init__()
+        self.add(tf.keras.layers.Input((CIFAR10.H, CIFAR10.W, CIFAR10.C)))
+
+        self.add(tf.keras.layers.Conv2D(filters=64, kernel_size=(5, 5), activation=tf.nn.relu))
+        self.add(tf.keras.layers.MaxPool2D())
+        self.add(tf.keras.layers.BatchNormalization())
+
+        self.add(tf.keras.layers.Conv2D(filters=128, kernel_size=(3, 3), activation=tf.nn.relu))
+        self.add(tf.keras.layers.BatchNormalization())
+
+        self.add(tf.keras.layers.Conv2D(filters=192, kernel_size=(3, 3), activation=tf.nn.relu))
+        self.add(tf.keras.layers.BatchNormalization())
+        self.add(tf.keras.layers.MaxPool2D())
+
+        self.add(tf.keras.layers.Conv2D(filters=256, kernel_size=(3, 3), activation=tf.nn.relu))
+        self.add(tf.keras.layers.BatchNormalization())
+
+        self.add(tf.keras.layers.Conv2D(filters=384, kernel_size=(3, 3), activation=tf.nn.relu))
+        self.add(tf.keras.layers.BatchNormalization())
+
+        self.add(tf.keras.layers.Flatten())
+
+        self.add(tf.keras.layers.Dense(400, activation=tf.nn.relu,
+                                       activity_regularizer=tf.keras.regularizers.l2(0.001)))
+        self.add(tf.keras.layers.Dropout(0.5))
+        self.add(tf.keras.layers.BatchNormalization())
+
+        self.add(tf.keras.layers.Dense(400, activation=tf.nn.relu,
+                                       activity_regularizer=tf.keras.regularizers.l2(0.001)))
+        self.add(tf.keras.layers.Dropout(0.5))
+
+        self.add(tf.keras.layers.Dense(CIFAR10.LABELS, activation=tf.nn.softmax))
 
         # TODO: After creating the model, call `self.compile` with appropriate arguments.
-
-        self.tb_callback=tf.keras.callbacks.TensorBoard(args.logdir, update_freq=1000, profile_batch=1)
+        self.compile(
+            optimizer=tf.keras.optimizers.Adam(),
+            loss=tf.keras.losses.SparseCategoricalCrossentropy(),
+            metrics=[tf.keras.metrics.SparseCategoricalAccuracy(name="accuracy")]
+        )
+        self.tb_callback = tf.keras.callbacks.TensorBoard(args.logdir, update_freq=1000, profile_batch=1)
         self.tb_callback.on_train_end = lambda *_: None
 
     def train(self, cifar, args):
         self.fit(
-            cifar.train.data["images"], cifar.train.data["labels"],
+            x=cifar.train.data["images"], y=cifar.train.data["labels"],
             batch_size=args.batch_size, epochs=args.epochs,
             validation_data=(cifar.dev.data["images"], cifar.dev.data["labels"]),
             callbacks=[self.tb_callback],
@@ -36,8 +78,8 @@ if __name__ == "__main__":
 
     # Parse arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument("--batch_size", default=50, type=int, help="Batch size.")
-    parser.add_argument("--epochs", default=30, type=int, help="Number of epochs.")
+    parser.add_argument("--batch_size", default=40, type=int, help="Batch size.")
+    parser.add_argument("--epochs", default=75, type=int, help="Number of epochs.")
     parser.add_argument("--threads", default=1, type=int, help="Maximum number of threads to use.")
     args = parser.parse_args()
 
