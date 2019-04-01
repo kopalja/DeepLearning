@@ -1,3 +1,7 @@
+# dd7e3410-38c0-11e8-9b58-00505601122b
+# 6e14ef6b-3281-11e8-9de3-00505601122b
+
+
 #!/usr/bin/env python3
 import numpy as np
 import tensorflow as tf
@@ -24,6 +28,58 @@ class Network(tf.keras.Model):
         # - `D-hidden_layer_size`: Add a dense layer with ReLU activation and specified size.
         # Produce the results in variable `hidden`.
 
+        def feed_forward(layer, hidden):
+            if layer[0] == 'CB':
+                hidden = tf.keras.layers.Conv2D(layer[1], layer[2], strides = layer[3], padding = layer[4], use_bias = False)(hidden)
+                hidden = tf.keras.layers.BatchNormalization()(hidden)
+                return tf.keras.layers.ReLU()(hidden)
+            elif layer[0] == 'C':
+                return tf.keras.layers.Conv2D(layer[1], layer[2], strides = layer[3], padding = layer[4], activation = tf.nn.relu)(hidden)
+            elif layer[0] == 'M':
+                return tf.keras.layers.MaxPool2D(*layer[1:])(hidden)
+            elif layer[0] == 'R':
+                inpt = hidden
+                for l in layer[1:]:
+                    hidden = feed_forward(l, hidden)
+                return hidden + inpt
+            elif layer[0] == 'F':
+                return tf.keras.layers.Flatten()(hidden)
+            elif layer[0] == 'D':
+                return tf.keras.layers.Dense(layer[1], activation = tf.nn.relu)(hidden)    
+                    
+
+        hidden = inputs
+        if args.cnn != None:
+            # preprocess args.cnn argument
+            in_residual = False
+            dsc = list(args.cnn)
+            for i in range(len(dsc)):
+                if dsc[i] == '[':
+                    in_residual = True
+                elif dsc[i] == ']':
+                    in_residual = False
+                elif dsc[i] == ',' and in_residual:
+                    dsc[i] = ';'
+            changed_argument = "".join(dsc)
+
+            print(changed_argument)
+
+            # parse args.cnn armument into parsed_layers 
+            parsed_layers = []
+            for layer in changed_argument.split(','):
+                if layer[0] == 'R':
+                    layers = layer[3:][:-1]
+                    l = ['R']
+                    for layer in layers.split(';'):
+                        l.append([int(p) if p.isdigit() else p for p in layer.split('-')])
+                    parsed_layers.append(l)
+                else:      
+                    parsed_layers.append([int(p) if p.isdigit() else p for p in layer.split('-')])
+
+            print(parsed_layers)
+            for layer in parsed_layers:
+                hidden = feed_forward(layer, hidden)
+
         # Add the final output layer
         outputs = tf.keras.layers.Dense(MNIST.LABELS, activation=tf.nn.softmax)(hidden)
 
@@ -49,6 +105,7 @@ class Network(tf.keras.Model):
     def test(self, mnist, args):
         test_logs = self.evaluate(mnist.test.data["images"], mnist.test.data["labels"], batch_size=args.batch_size)
         self.tb_callback.on_epoch_end(1, dict(("val_test_" + metric, value) for metric, value in zip(self.metrics_names, test_logs)))
+        return test_logs[self.metrics_names.index("accuracy")]
 
 
 if __name__ == "__main__":
@@ -60,7 +117,7 @@ if __name__ == "__main__":
     # Parse arguments
     parser = argparse.ArgumentParser()
     parser.add_argument("--batch_size", default=50, type=int, help="Batch size.")
-    parser.add_argument("--cnn", default=None, type=str, help="CNN architecture.")
+    parser.add_argument("--cnn", default="C-8-3-5-valid,R-[C-8-3-1-same,CB-8-3-1-same],F,D-50", type=str, help="CNN architecture.")
     parser.add_argument("--epochs", default=30, type=int, help="Number of epochs.")
     parser.add_argument("--recodex", default=False, action="store_true", help="Evaluation in ReCodEx.")
     parser.add_argument("--threads", default=1, type=int, help="Maximum number of threads to use.")
@@ -84,7 +141,11 @@ if __name__ == "__main__":
     # Load the data
     mnist = MNIST()
 
-    # Create the network, train and evaluate
+    # Create the network and train
     network = Network(args)
     network.train(mnist, args)
-    network.test(mnist, args)
+
+    # Compute test set accuracy and print it
+    accuracy = network.test(mnist, args)
+    with open("mnist_cnn.out", "w") as out_file:
+        print("{:.2f}".format(100 * accuracy), file=out_file)
