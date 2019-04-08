@@ -32,10 +32,10 @@ class Network(tf.keras.Sequential):
         self.add(tf.keras.layers.Conv2D(filters=192, kernel_size=(3, 3), activation=tf.nn.relu))
         self.add(tf.keras.layers.BatchNormalization())
         self.add(tf.keras.layers.MaxPool2D())
-
+       
         self.add(tf.keras.layers.Conv2D(filters=256, kernel_size=(3, 3), activation=tf.nn.relu))
         self.add(tf.keras.layers.BatchNormalization())
-
+        
         self.add(tf.keras.layers.Conv2D(filters=384, kernel_size=(3, 3), activation=tf.nn.relu))
         self.add(tf.keras.layers.BatchNormalization())
 
@@ -51,7 +51,7 @@ class Network(tf.keras.Sequential):
         self.add(tf.keras.layers.Dropout(0.5))
 
         self.add(tf.keras.layers.Dense(CIFAR10.LABELS, activation=tf.nn.softmax))
-
+        
         # TODO: After creating the model, call `self.compile` with appropriate arguments.
         self.compile(
             optimizer=tf.keras.optimizers.Adam(),
@@ -60,7 +60,7 @@ class Network(tf.keras.Sequential):
         )
         self.tb_callback = tf.keras.callbacks.TensorBoard(args.logdir, update_freq=1000, profile_batch=1)
         self.tb_callback.on_train_end = lambda *_: None
-
+        
     def train(self, cifar, args):
         self.fit(
             x=cifar.train.data["images"], y=cifar.train.data["labels"],
