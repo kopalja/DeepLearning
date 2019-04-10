@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# dd7e3410-38c0-11e8-9b58-00505601122b
+# 6e14ef6b-3281-11e8-9de3-00505601122b
 import numpy as np
 import tensorflow as tf
 
@@ -25,7 +27,40 @@ class Network:
         #
         # Train the outputs using SparseCategoricalCrossentropy for the first two inputs
         # and BinaryCrossentropy for the third one, utilizing Adam with default arguments.
-        pass
+        inputs1 = tf.keras.layers.Input((MNIST.H, MNIST.W, MNIST.C))
+        inputs2 = tf.keras.layers.Input((MNIST.H, MNIST.W, MNIST.C))
+
+        hidden = tf.keras.layers.Conv2D(filters=10, kernel_size=(3, 3), strides=2, activation=tf.nn.relu, padding='valid')
+        hidden1 = hidden(inputs1)
+        hidden2 = hidden(inputs2)
+
+        hidden = tf.keras.layers.Conv2D(filters=20, kernel_size=(3, 3), strides=2, activation=tf.nn.relu, padding='valid')
+        hidden1 = hidden(hidden1)
+        hidden2 = hidden(hidden2)
+        
+        hidden = tf.keras.layers.Flatten()
+        hidden1 = hidden(hidden1)
+        hidden2 = hidden(hidden2)
+
+        hidden = tf.keras.layers.Dense(200, activation=tf.nn.relu)
+        hidden1 = hidden(hidden1)
+        hidden2 = hidden(hidden2)
+        
+        classification = tf.keras.layers.Dense(MNIST.LABELS, activation=tf.nn.softmax)
+        classification1 = classification(hidden1)
+        classification2 = classification(hidden2)
+
+        concat = tf.keras.layers.Concatenate()([hidden1, hidden2])
+        hidden = tf.keras.layers.Dense(200, activation=tf.nn.relu)(concat)
+        out = tf.keras.layers.Dense(1, activation=tf.nn.sigmoid)(hidden)
+
+        self.model = tf.keras.Model(inputs=[inputs1, inputs2], outputs=[classification1, classification2, out])
+        self.model.compile(
+            loss = [tf.keras.losses.SparseCategoricalCrossentropy(),
+                    tf.keras.losses.SparseCategoricalCrossentropy(),
+                    tf.keras.losses.BinaryCrossentropy()],
+            optimizer = tf.optimizers.Adam(),
+        )
 
     @staticmethod
     def _prepare_batches(batches_generator):
@@ -34,27 +69,44 @@ class Network:
             batches.append(batch)
             if len(batches) >= 2:
                 # TODO: yield the suitable modified inputs and targets using batches[0:2]
+                model_inputs = (batches[0]["images"], batches[1]["images"])
+                model_targets = (batches[0]["labels"],
+                    batches[1]["labels"],
+                    batches[0]["labels"] > batches[1]["labels"])
                 yield (model_inputs, model_targets)
                 batches.clear()
 
     def train(self, mnist, args):
         for epoch in range(args.epochs):
             # TODO: Train for one epoch using `model.train_on_batches`.
-            for batch in self._prepare_batches(mnist.train.batches(args.batch_size)):
-                pass
+            for inputs, targets in self._prepare_batches(mnist.train.batches(args.batch_size)):
+                self.model.train_on_batch(x=inputs, y=targets)
 
             # Print development evaluation
             print("Dev {}: directly predicting: {:.4f}, comparing digits: {:.4f}".format(epoch + 1, *self.evaluate(mnist.dev, args)))
+
+    def eval_indirect(self, out, targets):
+        num1, num2 = out[0].argmax(axis=1), out[1].argmax(axis=1)
+        return np.sum((num1 > num2) == targets[2])
+
+    def eval_direct(self, out, targets):
+        return np.sum((out[2].T > 0.5) == targets[2])
 
     def evaluate(self, dataset, args):
         # TODO: Evaluate the given dataset, returning two accuracies, the first being
         # the direct prediction of the model, and the second computed by comparing predicted
         # labels of the images.
+        direct_right, indirect_right, n = 0, 0, 0
         for inputs, targets in self._prepare_batches(dataset.batches(args.batch_size)):
-            pass
+            out = self.model.predict_on_batch(inputs)
 
+            direct_right += self.eval_direct(out, targets)
+            indirect_right += self.eval_indirect(out, targets)
+            n += targets[2].shape[0]
+
+        direct_accuracy = direct_right / n
+        indirect_accuracy = indirect_right / n  
         return direct_accuracy, indirect_accuracy
-
 
 if __name__ == "__main__":
     import argparse
