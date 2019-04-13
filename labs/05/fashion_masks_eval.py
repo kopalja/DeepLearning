@@ -7,8 +7,8 @@ import numpy as np
 from fashion_masks_data import FashionMasks
 
 parser = argparse.ArgumentParser()
-parser.add_argument("system", type=str, help="Path to system output.")
-parser.add_argument("dataset", type=str, help="Which dataset to evaluate ('dev', 'test').")
+parser.add_argument("--system", default="fashion_masks_dev.txt", type=str, help="Path to system output.")
+parser.add_argument("--dataset", default='dev', type=str, help="Which dataset to evaluate ('dev', 'test').")
 args = parser.parse_args()
 
 gold = getattr(FashionMasks(), args.dataset)
@@ -23,13 +23,16 @@ if len(system) != len(gold_labels):
         len(system), len(gold_labels)))
 
 iou = 0
+kopi_temp = 0
 for i in range(len(gold_labels)):
     system_label, *system_mask = map(int, system[i].split())
     if system_label == gold_labels[i]:
+        kopi_temp += 1
         system_mask = np.array(system_mask, dtype=gold_masks[i].dtype).reshape(gold_masks[i].shape)
         system_pixels = np.sum(system_mask)
         gold_pixels = np.sum(gold_masks[i])
         intersection_pixels = np.sum(system_mask * gold_masks[i])
         iou += intersection_pixels / (system_pixels + gold_pixels - intersection_pixels)
 
+print(kopi_temp / len(gold_labels))
 print("{:.3f}".format(100 * iou / len(gold_labels)))

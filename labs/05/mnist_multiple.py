@@ -6,6 +6,7 @@ import tensorflow as tf
 
 from mnist import MNIST
 
+
 # The neural network model
 class Network:
     def __init__(self, args):
