@@ -5,6 +5,12 @@ import tensorflow_hub as tfhub # Note: you need to install tensorflow_hub
 
 from caltech42 import Caltech42
 
+def image_processing(img: np.ndarray) -> np.ndarray:
+        img = tf.image.decode_image(img, channels=3, dtype=tf.float32)
+        img = tf.image.resize(img, size=(224,224)).numpy()
+        return img
+
+
 # The neural network model
 class Network:
     def __init__(self, args):
@@ -30,16 +36,42 @@ class Network:
         # graphs are saved. To again load the model, use
         #   model = tf.keras.experimental.load_from_saved_model(path, {"KerasLayer": tfhub.KerasLayer})
 
+        mobilenet_url = "https://tfhub.dev/google/tf2-preview/mobilenet_v2/feature_vector/2"
+
+        inp = tf.keras.layers.Input((224, 224, 3))
+        mobilenet = tfhub.KerasLayer(mobilenet_url, output_shape=[1280], trainable=False)
+
+        hidden = mobilenet(inp, training=False)
+        hidden = tf.keras.layers.Dropout(0.5)(hidden)
+        hidden = tf.keras.layers.BatchNormalization()(hidden)
+
+        hidden = tf.keras.layers.Dense(640, activation=tf.nn.relu)(hidden)
+        hidden = tf.keras.layers.Dropout(0.5)(hidden)
+        hidden = tf.keras.layers.BatchNormalization()(hidden)
+
+        out = tf.keras.layers.Dense(Caltech42.LABELS, activation=tf.nn.softmax)
+        out = out(hidden)
+
+        self.model = tf.keras.Model(inputs=inp, outputs=out)
+        self.model.compile(
+            loss=tf.losses.SparseCategoricalCrossentropy(),
+            optimizer=tf.keras.optimizers.Adam(),
+            metrics=[tf.keras.metrics.SparseCategoricalAccuracy(name='accuracy')]
+        )
+
         self.tb_callback=tf.keras.callbacks.TensorBoard(args.logdir, update_freq=1000, profile_batch=1)
         self.tb_callback.on_train_end = lambda *_: None
 
     def train(self, caltech42, args):
-        # TODO: Implement training
-        pass
+        self.model.fit(
+            x=caltech42.train.data["images"], y=caltech42.train.data["labels"],
+            batch_size=args.batch_size, callbacks=[self.tb_callback],
+            validation_data=(caltech42.dev.data["images"], caltech42.dev.data["labels"]),
+            epochs=args.epochs)
 
     def predict(self, caltech42, args):
-        # TODO: Implement prediction
-        pass
+        return self.model(caltech42.data["images"]).numpy()
+
 
 
 if __name__ == "__main__":
@@ -50,8 +82,8 @@ if __name__ == "__main__":
 
     # Parse arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument("--batch_size", default=None, type=int, help="Batch size.")
-    parser.add_argument("--epochs", default=None, type=int, help="Number of epochs.")
+    parser.add_argument("--batch_size", default=32, type=int, help="Batch size.")
+    parser.add_argument("--epochs", default=60, type=int, help="Number of epochs.")
     parser.add_argument("--threads", default=1, type=int, help="Maximum number of threads to use.")
     args = parser.parse_args()
 
@@ -69,7 +101,7 @@ if __name__ == "__main__":
     ))
 
     # Load data
-    caltech42 = Caltech42()
+    caltech42 = Caltech42(image_processing=image_processing)
 
     # Create the network and train
     network = Network(args)
@@ -79,3 +111,6 @@ if __name__ == "__main__":
     with open(os.path.join(args.logdir, "caltech42_competition_test.txt"), "w", encoding="utf-8") as out_file:
         for probs in network.predict(caltech42.test, args):
             print(np.argmax(probs), file=out_file)
+
+    
+
