@@ -64,6 +64,7 @@ class Network:
         if args.hidden_layer != None:
             hidden = tf.keras.layers.Dense(args.hidden_layer, activation = tf.nn.relu)(hidden)
 
+
         # TODO: Generate predictions using a fully connected layer
         # with one output and `tf.nn.sigmoid` activation.
         predictions = tf.keras.layers.Dense(1, activation = tf.nn.sigmoid)(hidden)
@@ -77,7 +78,7 @@ class Network:
         # I usually add `flush_millis=10 * 1000` arguments to get the results reasonably quickly.
 
         self._optimizer = tf.keras.optimizers.Adam()
-        self._loss = tf.keras.losses.MeanSquaredError()
+        self._loss = tf.keras.losses.BinaryCrossentropy()
         self._metrics = {
             "loss": tf.metrics.Mean(),
             "accuracy": tf.metrics.BinaryAccuracy()
@@ -100,21 +101,17 @@ class Network:
         #
         # Apply the gradients using the `self._optimizer`
         with tf.GradientTape() as tape:
-            #tape.watch(batch['sequences'])
+            tape.watch(batch['sequences'])
             probabilities = self.model(batch["sequences"], training = True)
             loss = self._loss(batch['labels'], probabilities)
-            gradients = tape.gradient(loss, self.model.variables)
+            gradients = tape.gradient(loss, self.model.trainable_variables)
 
         if clip_gradient != None:
-            gradient_norm = tf.clip_by_global_norm(gradients, clip_gradient)
+            gradients, gradient_norm = tf.clip_by_global_norm(gradients, clip_gradient)
         else:
             gradient_norm = tf.linalg.global_norm(gradients)
-
-        #self._optimizer(gradient_norm, self.model.trainable_variables)
-        #self._optimizer.apply_gradients(gradient_norm, self.model.trainable_variables)  
-        ### ???
     
-        self._optimizer.apply_gradients(zip(gradients, self.model.variables))
+        self._optimizer.apply_gradients(zip(gradients, self.model.trainable_variables))
 
         # Generate the summaries. Start by setting the current summary step using
         # `tf.summary.experimental.set_step(self._optimizer.iterations)`.
@@ -129,7 +126,7 @@ class Network:
         with self._writer.as_default():
             for metric in self._metrics:
                 self._metrics[metric].reset_states()
-            self._metrics['loss'].apply(loss)
+            self._metrics['loss'].update_state(loss)
             self._metrics['accuracy'].update_state(batch['labels'], probabilities)
             for metric in self._metrics:
                     tf.summary.scalar("train/" + metric, self._metrics[metric].result())
@@ -163,8 +160,7 @@ class Network:
         for batch in dataset.batches(args.batch_size):
             probabilities = self.predict_batch(batch)
             loss = self._loss(batch['labels'], probabilities)
-            self._metrics['loss'].apply(loss)
-            #self._metrics['loss'].update_state(loss)
+            self._metrics['loss'].update_state(loss)
             self._metrics['accuracy'].update_state(batch['labels'], probabilities)
 
         metrics = {
@@ -184,10 +180,11 @@ if __name__ == "__main__":
     import os
     import re
 
+
    # Parse arguments
     parser = argparse.ArgumentParser()
     parser.add_argument("--batch_size", default=16, type=int, help="Batch size.")
-    parser.add_argument("--clip_gradient", default=None, type=lambda x: None if x == "None" else float(x), help="Gradient clipping norm.")   
+    parser.add_argument("--clip_gradient", default=None, type=lambda x: None if x == "None" else float(x), help="Gradient clipping norm.")
     parser.add_argument("--hidden_layer", default=None, type=lambda x: None if x == "None" else int(x), help="Dense layer after RNN.")
     parser.add_argument("--epochs", default=20, type=int, help="Number of epochs.")
     parser.add_argument("--rnn_cell", default="LSTM", type=str, help="RNN cell type.")
