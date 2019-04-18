@@ -1,6 +1,7 @@
-import numpy as np
+# dd7e3410-38c0-11e8-9b58-00505601122b
+# 6e14ef6b-3281-11e8-9de3-00505601122b
 
-import os  
+import numpy as np
 import tensorflow as tf
 
 # Dataset for generating sequences, with labels predicting whether the cumulative sum
