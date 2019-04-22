@@ -45,9 +45,8 @@ class Network:
         hidden = tf.keras.layers.Dropout(0.5)(hidden)
         hidden = tf.keras.layers.BatchNormalization()(hidden)
 
-        hidden = tf.keras.layers.Dense(640, activation=tf.nn.relu)(hidden)
+        hidden = tf.keras.layers.Dense(960, activation=tf.nn.relu)(hidden)
         hidden = tf.keras.layers.Dropout(0.5)(hidden)
-        hidden = tf.keras.layers.BatchNormalization()(hidden)
 
         out = tf.keras.layers.Dense(Caltech42.LABELS, activation=tf.nn.softmax)
         out = out(hidden)
@@ -83,7 +82,7 @@ if __name__ == "__main__":
     # Parse arguments
     parser = argparse.ArgumentParser()
     parser.add_argument("--batch_size", default=32, type=int, help="Batch size.")
-    parser.add_argument("--epochs", default=60, type=int, help="Number of epochs.")
+    parser.add_argument("--epochs", default=100, type=int, help="Number of epochs.")
     parser.add_argument("--threads", default=1, type=int, help="Maximum number of threads to use.")
     args = parser.parse_args()
 
