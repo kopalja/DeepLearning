@@ -1,4 +1,6 @@
-#!/usr/bin/env python3
+# dd7e3410-38c0-11e8-9b58-00505601122b
+# 6e14ef6b-3281-11e8-9de3-00505601122b
+
 import numpy as np
 import tensorflow as tf
 
@@ -9,18 +11,25 @@ class Network:
         # TODO: Implement a one-layer RNN network. The input
         # `word_ids` consists of a batch of sentences, each
         # a sequence of word indices. Padded words have index 0.
-
+        self.model = tf.keras.Sequential()
+        
         # TODO: Embed input words with dimensionality `args.we_dim`, using
         # `mask_zero=True`.
+        self.model.add(tf.keras.layers.Embedding(input_dim=num_words + 1, output_dim=args.we_dim, mask_zero=True)) 
 
         # TODO: Create specified `args.rnn_cell` RNN cell (LSTM, GRU) with
         # dimension `args.rnn_cell_dim` and apply it in a bidirectional way on
         # the embedded words, concatenating opposite directions.
+        if args.rnn_cell == 'LSTM':
+            rnn_layer = tf.keras.layers.LSTM(args.rnn_cell_dim, return_sequences=True)
+        else:
+            rnn_layer = tf.keras.layers.GRU(args.rnn_cell_dim, return_sequences=True)
+        self.model.add(tf.keras.layers.Bidirectional(merge_mode='concat', layer=rnn_layer))
 
         # TODO: Add a softmax classification layer into `num_tags` classes, storing
         # the outputs in `predictions`.
+        self.model.add(tf.keras.layers.Dense(num_tags, activation=tf.nn.softmax))
 
-        self.model = tf.keras.Model(inputs=word_ids, outputs=predictions)
         self.model.compile(optimizer=tf.optimizers.Adam(),
                            loss=tf.losses.SparseCategoricalCrossentropy(),
                            metrics=[tf.metrics.SparseCategoricalAccuracy(name="accuracy")])
@@ -37,6 +46,12 @@ class Network:
             # Additionally, pass `reset_metrics=True`.
             #
             # Store the computed metrics in `metrics`.
+            x = batch[dataset.FORMS].word_ids
+            y = batch[dataset.TAGS].word_ids
+            metrics = self.model.train_on_batch(
+                x=x,
+                y=tf.reshape(y, [y.shape[0], y.shape[1], 1]),
+                reset_metrics=True)
 
             tf.summary.experimental.set_step(self.model.optimizer.iterations)
             with self._writer.as_default():
@@ -49,6 +64,12 @@ class Network:
             # TODO: Evaluate the given match, using the same inputs as in training.
             # Additionally, pass `reset_metrics=False` to aggregate the metrics.
             # Store the metrics of the last batch as `metrics`.
+            y=batch[dataset.TAGS].word_ids
+            
+            metrics = self.model.test_on_batch(
+                x=batch[dataset.FORMS].word_ids,
+                y=tf.reshape(y, [y.shape[0], y.shape[1], 1]),
+                reset_metrics=False)
         self.model.reset_metrics()
 
         metrics = dict(zip(self.model.metrics_names, metrics))
