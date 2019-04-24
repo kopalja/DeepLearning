@@ -11,11 +11,10 @@ class Network:
         # TODO: Implement a one-layer RNN network. The input
         # `word_ids` consists of a batch of sentences, each
         # a sequence of word indices. Padded words have index 0.
-        self.model = tf.keras.Sequential()
-        
+        word_ids = tf.keras.layers.Input(shape=(None,))
         # TODO: Embed input words with dimensionality `args.we_dim`, using
         # `mask_zero=True`.
-        self.model.add(tf.keras.layers.Embedding(input_dim=num_words + 1, output_dim=args.we_dim, mask_zero=True)) 
+        embed = tf.keras.layers.Embedding(input_dim=num_words + 1, output_dim=args.we_dim, mask_zero=True)(word_ids)
 
         # TODO: Create specified `args.rnn_cell` RNN cell (LSTM, GRU) with
         # dimension `args.rnn_cell_dim` and apply it in a bidirectional way on
@@ -24,12 +23,12 @@ class Network:
             rnn_layer = tf.keras.layers.LSTM(args.rnn_cell_dim, return_sequences=True)
         else:
             rnn_layer = tf.keras.layers.GRU(args.rnn_cell_dim, return_sequences=True)
-        self.model.add(tf.keras.layers.Bidirectional(merge_mode='concat', layer=rnn_layer))
+        hidden = tf.keras.layers.Bidirectional(merge_mode='concat', layer=rnn_layer)(embed)
 
         # TODO: Add a softmax classification layer into `num_tags` classes, storing
         # the outputs in `predictions`.
-        self.model.add(tf.keras.layers.Dense(num_tags, activation=tf.nn.softmax))
-
+        predictions = tf.keras.layers.Dense(num_tags, activation=tf.nn.softmax)(hidden)
+        self.model = tf.keras.Model(inputs=word_ids, outputs=predictions)   
         self.model.compile(optimizer=tf.optimizers.Adam(),
                            loss=tf.losses.SparseCategoricalCrossentropy(),
                            metrics=[tf.metrics.SparseCategoricalAccuracy(name="accuracy")])
