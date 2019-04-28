@@ -3,24 +3,72 @@ import numpy as np
 import tensorflow as tf
 
 from modelnet import ModelNet
+from tensorflow.keras.layers import Input, Conv3D, Activation, MaxPooling3D, BatchNormalization, Dense, GlobalAveragePooling3D, SpatialDropout3D
+
 
 # The neural network model
 class Network:
     def __init__(self, modelnet, args):
         # TODO: Define a suitable model, and either `.compile` it, or prepare
         # optimizer and loss manually.
+        inp = Input(shape=(modelnet.H, modelnet.W, modelnet.D, modelnet.C))
+
+        hidden = Conv3D(24, (3,3,3), activation=None, padding='same')(inp)
+        hidden = SpatialDropout3D(0.4)(hidden)
+        hidden = BatchNormalization()(hidden)
+        hidden = Activation(tf.nn.relu)(hidden)
+
+        hidden = Conv3D(24, (3,3,3), activation=None, padding='same')(hidden)
+        hidden = SpatialDropout3D(0.4)(hidden)
+        hidden = BatchNormalization()(hidden)
+        hidden = Activation(tf.nn.relu)(hidden)
+
+        hidden = MaxPooling3D((2,2,2))(hidden)
+
+        hidden = Conv3D(48, (3,3,3), activation=None)(hidden)
+        hidden = BatchNormalization()(hidden)
+        hidden = Activation(tf.nn.relu)(hidden)
+
+        hidden = Conv3D(48, (3,3,3), activation=None)(hidden)
+        hidden = BatchNormalization()(hidden)
+        hidden = Activation(tf.nn.relu)(hidden)
+
+        hidden = MaxPooling3D((2,2,2))(hidden)
+
+        hidden = Conv3D(96, (3,3,3), activation=None)(hidden)
+        hidden = BatchNormalization()(hidden)
+        hidden = Activation(tf.nn.relu)(hidden)
+
+        hidden = Conv3D(96, (3,3,3), activation=None)(hidden)
+        hidden = BatchNormalization()(hidden)
+        hidden = Activation(tf.nn.relu)(hidden)
+
+        hidden = MaxPooling3D((2,2,2))(hidden)
+
+        hidden = GlobalAveragePooling3D()(hidden)
+
+        output = Dense(len(modelnet.LABELS), activation=tf.nn.softmax)(hidden)
+
+        self.model = tf.keras.Model(inputs=inp, outputs=output)
+        self.model.compile(
+            optimizer=tf.optimizers.Adam(),
+            loss=tf.losses.SparseCategoricalCrossentropy(),
+            metrics=[tf.metrics.SparseCategoricalAccuracy(name="accuracy")]
+        )
 
         self.tb_callback=tf.keras.callbacks.TensorBoard(args.logdir, update_freq=1000, profile_batch=1)
         self.tb_callback.on_train_end = lambda *_: None
 
     def train(self, modelnet, args):
         # TODO: Train the network on a given dataset.
-        raise NotImplementedError()
+        self.model.fit(x=modelnet.train.data["voxels"], y=modelnet.train.data["labels"],
+            batch_size=args.batch_size, epochs=args.epochs,
+            validation_data=(modelnet.dev.data["voxels"], modelnet.dev.data["labels"]))
 
     def predict(self, dataset, args):
         # TODO: Predict method should return a list/np.ndarray of
         # label probabilities from the test set
-        raise NotImplementedError()
+        return self.model.predict(dataset.data["voxels"])
 
 
 if __name__ == "__main__":
@@ -31,9 +79,9 @@ if __name__ == "__main__":
 
     # Parse arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument("--batch_size", default=None, type=int, help="Batch size.")
-    parser.add_argument("--modelnet", default=20, type=int, help="ModelNet dimension.")
-    parser.add_argument("--epochs", default=None, type=int, help="Number of epochs.")
+    parser.add_argument("--batch_size", default=32, type=int, help="Batch size.")
+    parser.add_argument("--modelnet", default=32, type=int, help="ModelNet dimension.")
+    parser.add_argument("--epochs", default=50, type=int, help="Number of epochs.")
     parser.add_argument("--threads", default=1, type=int, help="Maximum number of threads to use.")
     args = parser.parse_args()
 
