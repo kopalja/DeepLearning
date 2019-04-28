@@ -56,5 +56,7 @@ class TimitMFCC:
         with open(path, "rb") as timit_mfcc_file:
             data = pickle.load(timit_mfcc_file)
 
+
+
         for dataset in ["train", "dev", "test"]:
             setattr(self, dataset, self.Dataset(data[dataset], shuffle_batches=dataset == "train"))
