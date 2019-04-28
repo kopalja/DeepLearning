@@ -1,3 +1,6 @@
+# dd7e3410-38c0-11e8-9b58-00505601122b
+# 6e14ef6b-3281-11e8-9de3-00505601122b
+
 #!/usr/bin/env python3
 import contextlib
 
@@ -9,14 +12,20 @@ from timit_mfcc import TimitMFCC
 class Network:
     def __init__(self, args):
         self._beam_width = args.ctc_beam
-
         # TODO: Define a suitable model, given already masked `mfcc` with shape
         # `[None, TimitMFCC.MFCC_DIM]`. The last layer should be a Dense layer
         # without an activation and with `len(TimitMFCC.LETTERS) + 1` outputs,
         # where the `+ 1` is for the CTC blank symbol.
         #
-        # Store the results in `self.model`.
+        # Store the results in `self.model`.    
+        sequences = tf.keras.layers.Input(shape=[None, TimitMFCC.MFCC_DIM])
+        hidden = tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(150, return_sequences = True))(sequences)
+        hidden2 = hidden
+        hidden = tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(150, return_sequences = True))(hidden)
+        hidden = tf.keras.layers.Add()([hidden, hidden2])
+        predictions = tf.keras.layers.Dense(len(TimitMFCC.LETTERS) + 1)(hidden)
 
+        self.model = tf.keras.Model(inputs=sequences, outputs=predictions)
         # The following are just defaults, do not hesitate to modify them.
         self._optimizer = tf.optimizers.Adam()
         self._loss = tf.losses.SparseCategoricalCrossentropy()
@@ -64,31 +73,67 @@ class Network:
                                   tf.TensorSpec(shape=[None, None], dtype=tf.int32)])
     def train_batch(self, mfcc, mfcc_lens, targets):
         # TODO: Implement batch training.
-        pass
+        with tf.GradientTape() as tape:
+            logits = self._compute_logits(mfcc, mfcc_lens, training = True)
+            loss = self._ctc_loss(logits, mfcc_lens, self._to_sparse(targets))
+            gradients = tape.gradient(loss, self.model.trainable_variables)
+            self._optimizer.apply_gradients(zip(gradients, self.model.trainable_variables))
+            self._metrics["loss"].update_state(loss)
+
+
 
     def train_epoch(self, dataset, args):
         # TODO: Store suitable metrics in TensorBoard
+        for metric in self._metrics:
+            self._metrics[metric].reset_states()
         for batch in dataset.batches(args.batch_size):
             self.train_batch(batch["mfcc"], batch["mfcc_len"], batch["letters"])
+
+        metric = { "training_loss": self._metrics["loss"].result()}
+        with self._writer.as_default():
+            for name, metric in metrics.items():
+                tf.summary.scalar("test/" + name, metric)
 
     @tf.function(input_signature=[tf.TensorSpec(shape=[None, None, TimitMFCC.MFCC_DIM], dtype=tf.float32),
                                   tf.TensorSpec(shape=[None], dtype=tf.int32),
                                   tf.TensorSpec(shape=[None, None], dtype=tf.int32)])
     def evaluate_batch(self, mfcc, mfcc_lens, targets):
         # TODO: Implement batch evaluation.
-        pass
+        logits = self._compute_logits(mfcc, mfcc_lens, training = False)
+        loss = self._ctc_loss(logits, mfcc_lens, self._to_sparse(targets))
+        self._metrics["loss"].update_state(loss)
+        prediction_lens = self._ctc_predict(logits, mfcc_lens)
+        self._metrics["edit_distance"].update_state(self._edit_distance(prediction_lens, self._to_sparse(targets)))
+
+
 
     def evaluate(self, dataset, dataset_name, args):
         # TODO: Store suitable metrics in TensorBoard
+        tf.summary.experimental.set_step(self._optimizer.iterations)
+        for metric in self._metrics:
+            self._metrics[metric].reset_states()
+
         for batch in dataset.batches(args.batch_size):
             self.evaluate_batch(batch["mfcc"], batch["mfcc_len"], batch["letters"])
+
+        metrics = {
+            "loss": self._metrics["loss"].result(),
+            "edit_distance": self._metrics["edit_distance"].result()
+        }
+        with self._writer.as_default():
+            for name, metric in metrics.items():
+                tf.summary.scalar("test/" + name, metric)
+
+
 
     @tf.function(input_signature=[tf.TensorSpec(shape=[None, None, TimitMFCC.MFCC_DIM], dtype=tf.float32),
                                   tf.TensorSpec(shape=[None], dtype=tf.int32)])
     def predict_batch(self, mfcc, mfcc_lens):
         # TODO: Implement batch prediction, returning a tuple (dense_predictions, prediction_lens)
         # produced by self._to_dense.
-        pass
+        logits = self._compute_logits(mfcc, mfcc_lens, training = False)
+        prediction_lens = self._ctc_predict(logits, mfcc_lens)
+        return self._to_dense(prediction_lens)
 
     def predict(self, dataset, args):
         sentences = []
@@ -104,13 +149,16 @@ if __name__ == "__main__":
     import os
     import re
 
-    # Parse arguments
+
+    Parse arguments
     parser = argparse.ArgumentParser()
     parser.add_argument("--batch_size", default=50, type=int, help="Batch size.")
-    parser.add_argument("--ctc_beam", default=16, type=int, help="CTC beam.")
-    parser.add_argument("--epochs", default=10, type=int, help="Number of epochs.")
-    parser.add_argument("--threads", default=1, type=int, help="Maximum number of threads to use.")
+    parser.add_argument("--ctc_beam", default=22, type=int, help="CTC beam.")
+    parser.add_argument("--epochs", default=30, type=int, help="Number of epochs.")
+    parser.add_argument("--threads", default=8, type=int, help="Maximum number of threads to use.")
     args = parser.parse_args()
+
+
 
     # Fix random seeds and number of threads
     np.random.seed(42)
@@ -118,7 +166,7 @@ if __name__ == "__main__":
     tf.config.threading.set_inter_op_parallelism_threads(args.threads)
     tf.config.threading.set_intra_op_parallelism_threads(args.threads)
 
-    # Create logdir name
+    Create logdir name
     args.logdir = os.path.join("logs", "{}-{}-{}".format(
         os.path.basename(__file__),
         datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S"),
@@ -134,6 +182,8 @@ if __name__ == "__main__":
         network.train_epoch(timit.train, args)
         network.evaluate(timit.dev, "dev", args)
 
+
+
     # Generate test set annotations, but to allow parallel execution, create it
     # in in args.logdir if it exists.
     out_path = "speech_recognition_test.txt"
@@ -141,3 +191,4 @@ if __name__ == "__main__":
     with open(out_path, "w", encoding="utf-8") as out_file:
         for sentence in network.predict(timit.test, args):
             print(" ".join(timit.LETTERS[letters] for letters in sentence), file=out_file)
+
