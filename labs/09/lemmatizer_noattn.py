@@ -1,6 +1,8 @@
-#!/usr/bin/env python3
+
+#!/home/kopi/tools/enviroments/tf2_env/bin python3
 import numpy as np
 import tensorflow as tf
+
 
 import decoder
 from morpho_dataset import MorphoDataset
@@ -14,15 +16,22 @@ class Network:
                 # TODO: Define
                 # - source_embeddings as a masked embedding layer of source chars into args.cle_dim dimensions
                 # - source_rnn as a bidirectional GRU with args.rnn_dim units, returning only the last state, summing opposite directions
+                self.source_embeddings = tf.keras.layers.Embedding(num_source_chars, args.cle_dim, mask_zero = True)
+                self.source_rnn = tf.keras.layers.Bidirectional(tf.keras.layers.GRU(args.rnn_dim), merge_mode = 'sum')
 
                 # - target_embedding as an unmasked embedding layer of target chars into args.cle_dim dimensions
                 # - target_rnn_cell as a GRUCell with args.rnn_dim units
                 # - target_output_layer as a Dense layer into `num_target_chars`
+                self.target_embedding = tf.keras.layers.Embedding(num_target_chars, args.cle_dim, mask_zero = False)
+                self.target_rnn_cell = tf.keras.layers.GRUCell(args.rnn_dim)
+                self.target_output_layer = tf.keras.layers.Dense(num_target_chars)
+
 
         self._model = Model()
 
         self._optimizer = tf.optimizers.Adam()
         # TODO: Define self._loss as SparseCategoricalCrossentropy which processes _logits_ instead of probabilities
+        self._loss = tf.losses.SparseCategoricalCrossentropy(from_logits = True)
         self._metrics_training = {"loss": tf.metrics.Mean(), "accuracy": tf.metrics.SparseCategoricalAccuracy()}
         self._metrics_evaluation = {"accuracy": tf.metrics.Mean()}
         self._writer = tf.summary.create_file_writer(args.logdir, flush_millis=10 * 1000)
@@ -36,10 +45,13 @@ class Network:
     @tf.function(input_signature=[tf.TensorSpec(shape=[None, None], dtype=tf.int32)] * 4, autograph=False)
     def train_batch(self, source_charseq_ids, source_charseqs, target_charseq_ids, target_charseqs):
         # TODO: Modify target_charseqs by appending EOW; only the version with appended EOW is used from now on.
+        target_charseqs = self._append_eow(target_charseqs)
 
         with tf.GradientTape() as tape:
             # TODO: Embed source charseqs
             # TODO: Run self._model.source_rnn on the embedded sequences, returning outputs in `source_states`.
+            embeded_Source = self._model.source_embeddings(source_charseqs)
+            source_states = self._model.source_rnn(embeded_Source)
 
             # Copy the source_states to corresponding batch places, and then flatten it
             source_mask = tf.not_equal(source_charseq_ids, 0)
@@ -48,11 +60,11 @@ class Network:
 
             class DecoderTraining(decoder.BaseDecoder):
                 @property
-                def batch_size(self): raise NotImplemented() # TODO: Return batch size of self._source_states, using tf.shape
+                def batch_size(self): return tf.shape(self._source_states)[0] # TODO: Return batch size of self._source_states, using tf.shape
                 @property
-                def output_size(self): raise NotImplemented() # TODO: Return number of the generated logits
+                def output_size(self): return 1 # ??? # TODO: Return number of the generated logits
                 @property
-                def output_dtype(self): return NotImplemented() # TODO: Return the type of the generated logits
+                def output_dtype(self): return tf.float32 # TODO: Return the type of the generated logits
 
                 def initialize(self, layer_inputs, initial_state=None):
                     self._model, self._source_states, self._targets = layer_inputs
@@ -61,6 +73,9 @@ class Network:
                     # TODO: Define `inputs` as a vector of self.batch_size MorphoDataset.Factor.BOW [see tf.fill],
                     # embedded using self._model.target_embedding
                     # TODO: Define `states` as self._source_states
+                    finished = tf.fill(dims = (self.batch_size,), value = False)
+                    inputs = self._model.target_embedding(tf.fill(dims = (self.batch_size,), value = MorphoDataset.Factor.BOW))
+                    states = self._source_states
                     return finished, inputs, states
 
                 def step(self, time, inputs, states):
@@ -70,10 +85,17 @@ class Network:
                     # TODO: Define `next_inputs` by embedding `time`-th words from `self._targets`.
                     # TODO: Define `finished` as True if `time`-th word from `self._targets` is EOW, False otherwise.
                     # Again, no == or !=.
+                    outputs, [states] = self._model.target_rnn_cell(inputs, [states])
+                    outputs = self._model.target_output_layer(outputs)
+                    next_inputs = self._model.target_embedding(self._targets[time])
+                    finished = tf.equal(self._targets[time], MorphoDataset.Factor.EOW)
+
                     return outputs, states, next_inputs, finished
 
             output_layer, _, _ = DecoderTraining()([self._model, source_states, targets])
             # TODO: Compute loss. Use only nonzero `targets` as a mask.
+            mask = tf.not_equal(targets, tf.constant(0, dtype=targets.dtype))
+            loss = self._loss(target_charseqs, output_layer, mask)
         gradients = tape.gradient(loss, self._model.variables)
         self._optimizer.apply_gradients(zip(gradients, self._model.variables))
 
@@ -90,6 +112,12 @@ class Network:
     def train_epoch(self, dataset, args):
         for batch in dataset.batches(args.batch_size):
             # TODO: Call train_batch, storing results in `predictions`.
+            predictions = self.train_batch(
+                batch[dataset.FORMS].charseq_ids,
+                batch[dataset.FORMS].charseqs,
+                batch[dataset.LEMMAS].charseq_ids,
+                batch[dataset.LEMMAS].charseqs
+                ) # ???
 
             form, gold_lemma, system_lemma = "", "", ""
             for i in batch[dataset.FORMS].charseqs[1]:
