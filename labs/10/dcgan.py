@@ -1,4 +1,6 @@
-#!/usr/bin/env python3
+# dd7e3410-38c0-11e8-9b58-00505601122b
+# 6e14ef6b-3281-11e8-9de3-00505601122b
+
 import numpy as np
 import tensorflow as tf
 
@@ -18,6 +20,25 @@ class Network:
         #   stride 2, same padding, and ReLU activation
         # - applies transposed convolution with 1 filters, kernel size 5,
         #   stride 2, same padding, and sigmoid activation
+        gen_in = tf.keras.layers.Input([args.z_dim])
+
+        hidden = tf.keras.layers.Dense(1024, use_bias=False)(gen_in)
+        hidden = tf.keras.layers.BatchNormalization()(hidden)
+        hidden = tf.keras.layers.Activation(tf.nn.relu)(hidden)
+
+        hidden = tf.keras.layers.Dense(MNIST.H // 4 * MNIST.W // 4 * 64, use_bias=False)(hidden)
+        hidden = tf.keras.layers.BatchNormalization()(hidden)
+        hidden = tf.keras.layers.Activation(tf.nn.relu)(hidden)
+
+        hidden = tf.keras.layers.Reshape([MNIST.H // 4, MNIST.W // 4, 64])(hidden)
+
+        hidden = tf.keras.layers.Conv2DTranspose(kernel_size=5, filters=32, strides=2, padding='same', use_bias=False)(hidden)
+        hidden = tf.keras.layers.BatchNormalization()(hidden)
+        hidden = tf.keras.layers.Activation(tf.nn.relu)(hidden)
+
+        gen_out = tf.keras.layers.Conv2DTranspose(kernel_size=5, filters=1, strides=2, padding='same', activation=tf.nn.sigmoid)(hidden)
+
+        self.generator = tf.keras.Model(inputs=gen_in, outputs=gen_out)
 
         # TODO: Define `self.discriminator` as a Model, which
         # - takes input images with shape [MNIST.H, MNIST.W, MNIST.C]
@@ -31,6 +52,30 @@ class Network:
         # - applies batch normalized dense layer with 1024 uints and ReLU activation
         # - applies output dense layer with one output and a suitable activation function
 
+        disc_in = tf.keras.layers.Input([MNIST.H, MNIST.W, MNIST.C])
+
+        hidden = tf.keras.layers.Conv2D(filters=32, kernel_size=5, padding='same', use_bias=False)(disc_in)
+        hidden = tf.keras.layers.BatchNormalization()(hidden)
+        hidden = tf.keras.layers.Activation(tf.nn.relu)(hidden)
+
+        hidden = tf.keras.layers.MaxPooling2D(pool_size=(2,2), strides=(2,2))(hidden)
+
+        hidden = tf.keras.layers.Conv2D(filters=64, kernel_size=5, padding='same', use_bias=False)(hidden)
+        hidden = tf.keras.layers.BatchNormalization()(hidden)
+        hidden = tf.keras.layers.Activation(tf.nn.relu)(hidden)
+
+        hidden = tf.keras.layers.MaxPooling2D(pool_size=(2,2), strides=(2,2))(hidden)
+
+        hidden = tf.keras.layers.Flatten()(hidden)
+
+        hidden = tf.keras.layers.Dense(1024, use_bias=False)(hidden)
+        hidden = tf.keras.layers.BatchNormalization()(hidden)
+        hidden = tf.keras.layers.Activation(tf.nn.relu)(hidden)
+
+        disc_out = tf.keras.layers.Dense(1, tf.nn.sigmoid)(hidden)
+
+        self.discriminator = tf.keras.Model(inputs=disc_in, outputs=disc_out)
+
         self._generator_optimizer, self._discriminator_optimizer = tf.optimizers.Adam(), tf.optimizers.Adam()
         self._loss_fn = tf.losses.BinaryCrossentropy()
         self._discriminator_accuracy = tf.metrics.Mean()
@@ -38,24 +83,38 @@ class Network:
 
     def _sample_z(self, batch_size):
         """Sample random latent variable."""
-        return tf.random.uniform([batch_size, self._z_dim], -1, 1)
+        return tf.random.uniform([batch_size, self._z_dim], -1, 1, seed=42)
 
     @tf.function
     def train_batch(self, images):
         # TODO(gan): Generator training. Using a Gradient tape:
         # - generate random images using a `generator`; do not forget about `training=True`
-        # - run discriminator on the generated images
+        # - run discriminator on the generated images, also using `training=True` (even if
+        #   not updating discriminator parameters, we want to perform possible BatchNorm in it)
         # - compute loss using `_loss_fn`, with target labels `tf.ones_like(discriminator_output)`
         # Then, compute the gradients with respect to generator trainable variables and update
         # generator trainable weights using self._generator_optimizer.
+        with tf.GradientTape() as tape:
+            random_images = self.generator(self._sample_z(tf.shape(images)[0]), training=True)
+            discriminator_output = self.discriminator(random_images, training=True)
+            generator_loss = self._loss_fn(tf.ones_like(discriminator_output), discriminator_output)
+        gradients = tape.gradient(generator_loss, self.generator.trainable_variables)
+        self._generator_optimizer.apply_gradients(zip(gradients, self.generator.trainable_variables))
 
         # TODO(gan): Discriminator training. Using a Gradient tape:
         # - discriminate `images`, storing results in `discriminated_real`
         # - discriminate images generated in generator training, storing results in `discriminated_fake`
-        # - compute loss by using `_loss_fn` on both discriminated_real and discriminated_fake, with
-        #   suitable target labels (`tf.zeros_like` and `tf.ones_like` come handy).
+        # - compute loss by summing
+        #   - `_loss_fn` on discriminated_real with suitable target labes
+        #   - `_loss_fn` on discriminated_fake with suitable targets (`tf.{ones,zeros}_like` come handy).
         # Then, compute the gradients with respect to discriminator trainable variables and update
         # discriminator trainable weights using self._discriminator_optimizer.
+        with tf.GradientTape() as tape:
+            discriminated_real = self.discriminator(images, training=True)
+            discriminated_fake = self.discriminator(random_images, training=True)
+            discriminator_loss = self._loss_fn(tf.ones_like(discriminated_real), discriminated_real) + self._loss_fn(tf.zeros_like(discriminated_fake), discriminated_fake)
+        gradients = tape.gradient(discriminator_loss, self.discriminator.trainable_variables)
+        self._discriminator_optimizer.apply_gradients(zip(gradients, self.discriminator.trainable_variables))
 
         self._discriminator_accuracy(tf.greater(discriminated_real, 0.5))
         self._discriminator_accuracy(tf.less(discriminated_fake, 0.5))
