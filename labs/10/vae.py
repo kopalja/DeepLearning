@@ -18,14 +18,14 @@ class Network:
         #   i-th layer with args.encoder_layers[i] units
         # - generate two outputs z_mean and z_log_variance, each passing the result
         #   of the above line through its own dense layer with args.z_dim units
-        inp = tf.keras.layers.Input([MNIST.H, MNIST.W, MNIST.C])
-        hidden = tf.keras.layers.Flatten()(inp)
+        enc_in = tf.keras.layers.Input([MNIST.H, MNIST.W, MNIST.C])
+        hidden = tf.keras.layers.Flatten()(enc_in)
         for layer_size in args.encoder_layers:
             hidden = tf.keras.layers.Dense(layer_size, activation=tf.nn.relu)(hidden)
         z_mean = tf.keras.layers.Dense(args.z_dim)(hidden)
         z_log_variance = tf.keras.layers.Dense(args.z_dim)(hidden)
 
-        self.encoder = tf.keras.Model(inputs=inp, outputs=[z_mean, z_log_variance])
+        self.encoder = tf.keras.Model(inputs=enc_in, outputs=[z_mean, z_log_variance])
 
         # TODO: Define `self.decoder` as a Model, which
         # - takes vectors of [args.z_dim] shape on input
@@ -34,14 +34,14 @@ class Network:
         # - applies output dense layer with MNIST.H * MNIST.W * MNIST.C units
         #   and a suitable output activation
         # - reshapes the output (tf.keras.layers.Reshape) to [MNIST.H, MNIST.W, MNIST.C]
-        inp = tf.keras.layers.Input([args.z_dim])
-        hidden = inp
+        dec_in = tf.keras.layers.Input([args.z_dim])
+        hidden = dec_in
         for layer_size in args.decoder_layers:
             hidden = tf.keras.layers.Dense(layer_size, activation=tf.nn.relu)(hidden)
         hidden = tf.keras.layers.Dense(MNIST.H * MNIST.W * MNIST.C, activation=tf.nn.sigmoid)(hidden)
         output = tf.keras.layers.Reshape([MNIST.H, MNIST.W, MNIST.C])(hidden)
 
-        self.decoder = tf.keras.Model(inputs=inp, outputs=output)
+        self.decoder = tf.keras.Model(inputs=dec_in, outputs=output)
 
         self._optimizer = tf.optimizers.Adam()
         self._reconstruction_loss_fn = tf.losses.BinaryCrossentropy()
@@ -60,13 +60,13 @@ class Network:
             z_mean, z_log_variance = self.encoder(images, training=True)
             # TODO: Sample `z` from a Normal distribution with mean `z_mean` and variance `exp(z_log_variance)`.
             # Use `tf.random.normal` and **pass argument `seed=42`**.
-            z = z_mean + tf.math.multiply(tf.math.sqrt(tf.math.exp(z_log_variance)), tf.random.normal(shape=tf.shape(z_mean), seed=42))
+            z = z_mean + tf.math.multiply(tf.math.exp(z_log_variance / 2), tf.random.normal(shape=tf.shape(z_mean), dtype=tf.float32, seed=42))
             # TODO: Decode images using `z`.
             decoded = self.decoder(z, training=True)
             # TODO: Define `reconstruction_loss` using self._reconstruction_loss_fn
             reconstruction_loss = self._reconstruction_loss_fn(images, decoded)
             # TODO: Define `latent_loss` as a mean of KL divergences of suitable distributions.
-            latent_loss = tf.reduce_mean(self._kl_divergence(z_mean, tf.math.sqrt(tf.math.exp(z_log_variance)), tf.zeros_like(z_mean), tf.ones_like(z_mean)))
+            latent_loss = tf.reduce_mean(self._kl_divergence(z_mean, tf.math.exp(z_log_variance / 2), tf.zeros_like(z_mean), tf.ones_like(z_mean)))
             # TODO: Define `loss` as a weighted sum of the reconstruction_loss (weighted by the number
             # of pixels in one image) and the latent_loss (weighted by self._z_dim). Note that
             # the `loss` should be weighted sum, not weighted average.
@@ -74,9 +74,7 @@ class Network:
         # TODO: Compute gradients with respect to trainable variables of the encoder and the decoder.
         encoder_gradients, decoder_gradients = tape.gradient(loss, [self.encoder.trainable_variables, self.decoder.trainable_variables])
         # TODO: Apply the gradients to encoder and decoder trainable variables.
-        self._optimizer.apply_gradients(zip(encoder_gradients, self.encoder.trainable_variables))
-        self._optimizer.apply_gradients(zip(decoder_gradients, self.decoder.trainable_variables))
-
+        self._optimizer.apply_gradients(zip(encoder_gradients + decoder_gradients, self.encoder.trainable_variables + self.decoder.trainable_variables))
 
         tf.summary.experimental.set_step(self._optimizer.iterations)
         with self._writer.as_default():
