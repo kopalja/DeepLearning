@@ -60,7 +60,8 @@ class Network:
             z_mean, z_log_variance = self.encoder(images, training=True)
             # TODO: Sample `z` from a Normal distribution with mean `z_mean` and variance `exp(z_log_variance)`.
             # Use `tf.random.normal` and **pass argument `seed=42`**.
-            z = z_mean + tf.math.multiply(tf.math.sqrt(tf.math.exp(z_log_variance)), tf.random.normal(shape=tf.shape(z_mean), seed=42))
+            ### z = z_mean + tf.math.multiply(tf.math.sqrt(tf.math.exp(z_log_variance)), tf.random.normal(shape=tf.shape(z_mean), seed=42))
+            z = tf.random.normal(shape=tf.shape(z_mean), mean = z_mean, stddev = tf.math.sqrt(tf.math.exp(z_log_variance)), seed=42)
             # TODO: Decode images using `z`.
             decoded = self.decoder(z, training=True)
             # TODO: Define `reconstruction_loss` using self._reconstruction_loss_fn
