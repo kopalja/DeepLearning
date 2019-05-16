@@ -8,7 +8,6 @@ import numpy as np
 class NLIDataset:
     class Batch:
         """ Batch data type.
-
         Each batch is an object containing
         - word_ids: batch of word_ids
         - charseq_ids: batch of charseq_ids (the same shape as word_ids, but with the ids pointing into charseqs).
@@ -117,7 +116,6 @@ class NLIDataset:
 
         def vocabulary(self, feature):
             """Return vocabulary for required feature.
-
             The features are the following:
             words
             chars
@@ -177,7 +175,7 @@ class NLIDataset:
                 for i in range(len(charseqs)):
                     dense_charseqs[i, 0:len(charseqs[i])] = charseqs[i]
 
-                return NLIDataset.Batch(word_ids, charseq_ids, dense_charseqs, tags, levels, prompts, languages)
+                yield NLIDataset.Batch(word_ids, charseq_ids, dense_charseqs, tags, levels, prompts, languages)
 
 
     def __init__(self, path="nli_dataset.zip", add_bow_eow=False):
@@ -192,4 +190,4 @@ class NLIDataset:
                     setattr(self, dataset, self.Dataset(dataset_file,
                                                         train=self.train if dataset != "train" else None,
                                                         shuffle_batches=dataset == "train",
-                                                        add_bow_eow=add_bow_eow))
+add_bow_eow=add_bow_eow))
