@@ -1,3 +1,6 @@
+# dd7e3410-38c0-11e8-9b58-00505601122b
+# 6e14ef6b-3281-11e8-9de3-00505601122b
+
 #!/usr/bin/env python3
 import numpy as np
 import tensorflow as tf
@@ -9,28 +12,57 @@ class Network:
         # TODO: Define suitable model, similarly to `reinforce` or `reinforce_with_baseline`.
         #
         # Use Adam optimizer with given `args.learning_rate`.
-        raise NotImplementedError()
+        self.model = tf.keras.Sequential([
+            tf.keras.layers.Conv2D(16, 5, strides = 2, input_shape = [80, 80, 3], activation = tf.nn.relu),
+            tf.keras.layers.MaxPool2D((2, 2)),
+            tf.keras.layers.Flatten(),
+            tf.keras.layers.Dense(50, activation = tf.nn.relu),
+            tf.keras.layers.Dense(env.actions, activation = tf.nn.softmax)
+        ])
+
+        self.model.compile(
+            optimizer = tf.optimizers.Adam(args.learning_rate), 
+            loss      = 'sparse_categorical_crossentropy'
+            )
+
+        self.base_line = tf.keras.Sequential([
+            tf.keras.layers.Conv2D(16, 5, strides = 2, input_shape = [80, 80, 3], activation = tf.nn.relu),
+            tf.keras.layers.MaxPool2D((2, 2)),
+            tf.keras.layers.Flatten(),
+            tf.keras.layers.Dense(50, activation = tf.nn.relu),
+            tf.keras.layers.Dense(1)
+        ])
+
+        self.base_line.compile(
+            optimizer = tf.optimizers.Adam(args.learning_rate), 
+            loss      = 'mean_squared_error'
+            )
+
+
+
+
 
     def train(self, states, actions, returns):
         states, actions, returns = np.array(states), np.array(actions), np.array(returns)
-
         # TODO: Train the model using the states, actions and observed returns.
-        raise NotImplementedError()
+        predicted_baseline = self.base_line.predict_on_batch(states)
+        predicted_baseline = np.reshape(predicted_baseline, returns.shape)
+        self.model.train_on_batch(states, actions, sample_weight = returns - predicted_baseline)
+        self.base_line.train_on_batch(states, returns)
+
 
     def predict(self, states):
         states = np.array(states)
-
-        # TODO: Predict distribution over actions for the given input states. Return
-        # only the probabilities (if using a baseline).
-        raise NotImplementedError()
+        # TODO: Predict distribution over actions for the given input states
+        return self.model.predict_on_batch(states)
 
 
 if __name__ == "__main__":
     # Parse arguments
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--batch_size", default=None, type=int, help="Number of episodes to train on.")
-    parser.add_argument("--episodes", default=None, type=int, help="Training episodes.")
+    parser.add_argument("--batch_size", default=2, type=int, help="Number of episodes to train on.")
+    parser.add_argument("--episodes", default=250, type=int, help="Training episodes.")
     parser.add_argument("--learning_rate", default=0.001, type=float, help="Learning rate.")
     parser.add_argument("--render_each", default=0, type=int, help="Render some episodes.")
     parser.add_argument("--threads", default=1, type=int, help="Maximum number of threads to use.")
@@ -62,6 +94,7 @@ if __name__ == "__main__":
                 probabilities = network.predict([state])[0]
                 # TODO(reinforce): Compute `action` according to the distribution returned by the network.
                 # The `np.random.choice` method comes handy.
+                action = np.random.choice(len(probabilities), 1, p = probabilities)[0]
 
                 next_state, reward, done, _ = env.step(action)
 
@@ -72,6 +105,10 @@ if __name__ == "__main__":
                 state = next_state
 
             # TODO(reinforce): Compute `returns` from the observed `rewards`.
+            returns = []
+            g = 0
+            for i in range(len(rewards)):
+                returns.append(sum(rewards[i:]))
 
             batch_states += states
             batch_actions += actions
